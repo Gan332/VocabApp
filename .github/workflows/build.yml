@@ -1,0 +1,111 @@
+name: 🏗️ 远端构建 Android APK
+
+on:
+  push:
+    branches: [ main, master, develop ]
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+      - 'BUILD.md'
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: '构建类型'
+        required: true
+        default: 'debug'
+        type: choice
+        options:
+          - debug
+          - release
+
+env:
+  JAVA_VERSION: '17'
+  JAVA_DISTRIBUTION: 'temurin'
+
+jobs:
+  build:
+    name: 🔨 编译 APK (${{ github.event.inputs.build_type || 'debug' }})
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. 检出代码
+      - name: 📥 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      # 2. 设置 JDK 17
+      - name: ☕ 设置 JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+
+      # 3. 设置 Gradle & Android SDK
+      - name: 🏗️ 设置 Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: wrapper
+          cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
+
+      # 4. 接受 Android 许可证（setup-android 需要）
+      - name: 🤖 接受 Android SDK 许可证
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null 2>&1 || true
+          echo "✅ Android SDK 许可证已接受"
+
+      # 5. 编译 APK
+      - name: 🛠️ 编译 ${{ github.event.inputs.build_type || 'debug' }} APK
+        env:
+          BUILD_TYPE: ${{ github.event.inputs.build_type || 'debug' }}
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+        run: |
+          # Release 签名配置
+          if [ "$BUILD_TYPE" = "release" ] && [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > app/keystore.jks
+            echo "storeFile=keystore.jks" >> app/keystore.properties
+            echo "storePassword=$STORE_PASSWORD" >> app/keystore.properties
+            echo "keyAlias=$KEY_ALIAS" >> app/keystore.properties
+            echo "keyPassword=$KEY_PASSWORD" >> app/keystore.properties
+            echo "✅ 签名密钥已配置"
+          fi
+
+          # 执行构建
+          ./gradlew assemble${BUILD_TYPE^} --no-daemon --stacktrace
+
+      # 6. 上传 APK 产物
+      - name: 📦 上传 APK 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: VocabApp-${{ github.event.inputs.build_type || 'debug' }}-${{ github.sha }}
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      # 7. 构建摘要
+      - name: 📊 构建摘要
+        run: |
+          BUILD_TYPE="${{ github.event.inputs.build_type || 'debug' }}"
+          echo "## ✅ 远端构建完成" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| 项目 | 值 |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-----|" >> $GITHUB_STEP_SUMMARY
+          echo "| 提交 | [${{ github.sha }}](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}) |" >> $GITHUB_STEP_SUMMARY
+          echo "| 分支 | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| 触发者 | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 构建类型 | \`${BUILD_TYPE}\` |" >> $GITHUB_STEP_SUMMARY
+          APK_COUNT=$(find app/build/outputs/apk -name "*.apk" 2>/dev/null | wc -l)
+          echo "| APK 文件数 | ${APK_COUNT} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📎 下载 APK" >> $GITHUB_STEP_SUMMARY
+          echo "在该页面顶部的 **Artifacts** 区域下载 APK 文件，传输到 Android 设备即可安装。" >> $GITHUB_STEP_SUMMARY
