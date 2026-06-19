@@ -24,6 +24,8 @@ env:
   JAVA_VERSION: '17'
   JAVA_DISTRIBUTION: 'temurin'
   ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+  ANDROID_HOME: /usr/local/lib/android/sdk
+  ANDROID_SDK_MANAGER: /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager
   CMDLINE_TOOLS_VERSION: '11076708'
 
 jobs:
@@ -59,17 +61,12 @@ jobs:
           mv cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
 
           # 接受许可证
-          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null 2>&1 || true
+          yes | $ANDROID_SDK_MANAGER --licenses || true
 
           # 安装必要组件
-          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager \
-            "platforms;android-34" \
-            "build-tools;34.0.0" \
-            "platform-tools" \
-            >/dev/null 2>&1 || true
+          $ANDROID_SDK_MANAGER "platforms;android-34" "build-tools;34.0.0" "platform-tools"
 
           echo "✅ Android SDK 安装完成"
-          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
 
       # 4. 缓存 Gradle 依赖
       - name: 💾 缓存 Gradle 依赖
