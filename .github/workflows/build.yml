@@ -121,7 +121,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      # 7. 编译 APK（捕获所有输出用于调试）
+      # 7. 编译 APK（输出错误到步骤摘要）
       - name: 🛠️ 编译 ${{ github.event.inputs.build_type || 'debug' }} APK
         env:
           BUILD_TYPE: ${{ github.event.inputs.build_type || 'debug' }}
@@ -140,31 +140,19 @@ jobs:
             echo "✅ 签名密钥已配置"
           fi
 
-          # 执行构建，捕获输出到文件
-          $HOME/gradle/bin/gradle assembleDebug --no-daemon --stacktrace --info 2>&1 | tee /tmp/gradle.log || true
+          # 执行构建
+          $HOME/gradle/bin/gradle assembleDebug --no-daemon --stacktrace 2>&1 || EXIT_CODE=$?
           
-          # 将 Gradle 输出写入步骤摘要（最后 100 行）
-          echo "## 📋 Gradle 构建输出（最后 100 行）" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          tail -100 /tmp/gradle.log >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          
-          # 检查是否有错误
-          if grep -i "error:" /tmp/gradle.log > /dev/null 2>&1; then
+          # 如果有错误，提取关键信息到步骤摘要
+          if [ -n "$EXIT_CODE" ] && [ "$EXIT_CODE" -ne 0 ]; then
+            echo "## ❌ 构建失败 (exit code $EXIT_CODE)" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "### ❌ 编译错误" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
-            grep -i "error:" /tmp/gradle.log | head -30 >> $GITHUB_STEP_SUMMARY
+            # 提取 ERROR 行和错误详情
+            $HOME/gradle/bin/gradle assembleDebug --no-daemon --stacktrace 2>&1 | tail -200 >> $GITHUB_STEP_SUMMARY 2>&1
             echo '```' >> $GITHUB_STEP_SUMMARY
+            exit $EXIT_CODE
           fi
-          
-          # 如果构建失败，返回非零退出码
-          if grep -q "BUILD FAILED" /tmp/gradle.log 2>/dev/null; then
-            echo "❌ 构建失败"
-            exit 1
-          fi
-          
-          echo "✅ 构建成功"
 
       # 7. 上传 APK 产物
       - name: 📦 上传 APK 产物
