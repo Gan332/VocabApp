@@ -121,7 +121,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      # 7. 编译 APK
+      # 7. 编译 APK（捕获所有输出用于调试）
       - name: 🛠️ 编译 ${{ github.event.inputs.build_type || 'debug' }} APK
         env:
           BUILD_TYPE: ${{ github.event.inputs.build_type || 'debug' }}
@@ -130,8 +130,6 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
         run: |
-          set -x  # 打印每条命令
-          
           # Release 签名配置
           if [ "$BUILD_TYPE" = "release" ] && [ -n "$KEYSTORE_BASE64" ]; then
             echo "$KEYSTORE_BASE64" | base64 -d > app/keystore.jks
@@ -142,16 +140,31 @@ jobs:
             echo "✅ 签名密钥已配置"
           fi
 
-          # 测试 Gradle 是否可用
-          echo "--- 测试 gradle 命令 ---"
-          which gradle || echo "gradle not in PATH"
-          $HOME/gradle/bin/gradle --version || echo "gradle command failed"
+          # 执行构建，捕获输出到文件
+          $HOME/gradle/bin/gradle assembleDebug --no-daemon --stacktrace --info 2>&1 | tee /tmp/gradle.log || true
           
-          # 执行构建
-          echo "--- 开始构建 ---"
-          $HOME/gradle/bin/gradle assembleDebug --no-daemon --stacktrace --info 2>&1
+          # 将 Gradle 输出写入步骤摘要（最后 100 行）
+          echo "## 📋 Gradle 构建输出（最后 100 行）" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          tail -100 /tmp/gradle.log >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
           
-          echo "--- 构建完成 ---"
+          # 检查是否有错误
+          if grep -i "error:" /tmp/gradle.log > /dev/null 2>&1; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### ❌ 编译错误" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            grep -i "error:" /tmp/gradle.log | head -30 >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # 如果构建失败，返回非零退出码
+          if grep -q "BUILD FAILED" /tmp/gradle.log 2>/dev/null; then
+            echo "❌ 构建失败"
+            exit 1
+          fi
+          
+          echo "✅ 构建成功"
 
       # 7. 上传 APK 产物
       - name: 📦 上传 APK 产物
