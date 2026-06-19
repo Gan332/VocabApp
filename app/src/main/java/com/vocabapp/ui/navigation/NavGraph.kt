@@ -2,9 +2,9 @@ package com.vocabapp.ui.navigation
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Psychology
-import androidx.compose.material.icons.filled.Statistics
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -21,7 +21,7 @@ import com.vocabapp.ui.stats.StatsScreen
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
     data object Banks : Screen("banks", "词库", Icons.Default.Book)
     data object Learn : Screen("learn", "学习", Icons.Default.Psychology)
-    data object Stats : Screen("stats", "统计", Icons.Default.Statistics)
+    data object Stats : Screen("stats", "统计", Icons.Default.BarChart)
 }
 
 val screens = listOf(Screen.Banks, Screen.Learn, Screen.Stats)
