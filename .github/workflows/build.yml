@@ -121,7 +121,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      # 7. 编译 APK（输出错误到步骤摘要）
+      # 7. 编译 debug APK（通过 tee 同时输出到终端和文件）
       - name: 🛠️ 编译 ${{ github.event.inputs.build_type || 'debug' }} APK
         env:
           BUILD_TYPE: ${{ github.event.inputs.build_type || 'debug' }}
@@ -140,21 +140,21 @@ jobs:
             echo "✅ 签名密钥已配置"
           fi
 
-          # 执行构建
-          $HOME/gradle/bin/gradle assembleDebug --no-daemon --stacktrace 2>&1 || EXIT_CODE=$?
-          
-          # 如果有错误，提取关键信息到步骤摘要
-          if [ -n "$EXIT_CODE" ] && [ "$EXIT_CODE" -ne 0 ]; then
-            echo "## ❌ 构建失败 (exit code $EXIT_CODE)" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            # 提取 ERROR 行和错误详情
-            $HOME/gradle/bin/gradle assembleDebug --no-daemon --stacktrace 2>&1 | tail -200 >> $GITHUB_STEP_SUMMARY 2>&1
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            exit $EXIT_CODE
-          fi
+          # 执行构建，同时输出到终端和日志文件
+          set -o pipefail
+          $HOME/gradle/bin/gradle assembleDebug --no-daemon --stacktrace 2>&1 | tee gradle_output.log
 
-      # 7. 上传 APK 产物
+      # 8. 📄 上传构建日志（无论成功失败）
+      - name: 📄 上传构建日志
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ github.sha }}
+          path: gradle_output.log
+          retention-days: 7
+          compression-level: 9
+
+      # 9. 上传 APK 产物
       - name: 📦 上传 APK 产物
         uses: actions/upload-artifact@v4
         with:
@@ -162,12 +162,13 @@ jobs:
           path: |
             app/build/outputs/apk/debug/*.apk
             app/build/outputs/apk/release/*.apk
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30
           compression-level: 0
 
-      # 8. 构建摘要
+      # 10. 构建摘要
       - name: 📊 构建摘要
+        if: success()
         run: |
           BUILD_TYPE="${{ github.event.inputs.build_type || 'debug' }}"
           echo "## ✅ 远端构建完成" >> $GITHUB_STEP_SUMMARY
@@ -185,3 +186,25 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📎 下载 APK" >> $GITHUB_STEP_SUMMARY
           echo "在该页面顶部的 **Artifacts** 区域下载 APK 文件，传输到 Android 设备即可安装。" >> $GITHUB_STEP_SUMMARY
+
+      # 11. 构建失败诊断
+      - name: 🔍 构建失败诊断
+        if: failure()
+        run: |
+          echo "## ❌ 构建失败" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f gradle_output.log ]; then
+            echo "### Gradle 输出（最后 50 行）" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            tail -50 gradle_output.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            
+            # 提取 ERROR 行
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### 编译错误" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            grep -n "error:" gradle_output.log | head -30 >> $GITHUB_STEP_SUMMARY || echo "（未找到 error: 关键字）" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          else
+            echo "未找到 gradle_output.log" >> $GITHUB_STEP_SUMMARY
+          fi
