@@ -68,25 +68,14 @@ jobs:
 
           echo "✅ Android SDK 安装完成"
 
-      # 4. 安装 Gradle 并生成 Wrapper
+      # 4. 安装 Gradle
       - name: 🏗️ 安装 Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: 8.5
           cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
 
-      # 5. 生成 Gradle Wrapper（如果 wrapper jar 不存在）
-      - name: 🔄 生成 Gradle Wrapper
-        run: |
-          if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
-            gradle wrapper --gradle-version 8.5
-            echo "✅ gradle-wrapper.jar 已生成"
-          else
-            echo "✅ gradle-wrapper.jar 已存在"
-          fi
-          chmod +x gradlew
-
-      # 6. 编译 APK
+      # 5. 编译 APK（直接使用 Gradle 命令，避免 wrapper jar 依赖）
       - name: 🛠️ 编译 ${{ github.event.inputs.build_type || 'debug' }} APK
         env:
           BUILD_TYPE: ${{ github.event.inputs.build_type || 'debug' }}
@@ -105,8 +94,8 @@ jobs:
             echo "✅ 签名密钥已配置"
           fi
 
-          # 执行构建
-          ./gradlew assemble${BUILD_TYPE^} --no-daemon --stacktrace
+          # 执行构建（直接使用 gradle 命令）
+          gradle assemble${BUILD_TYPE^} --no-daemon --stacktrace
 
       # 7. 上传 APK 产物
       - name: 📦 上传 APK 产物

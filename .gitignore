@@ -27,7 +27,8 @@ Thumbs.db
 *.swp
 *.swo
 
-# Gradle Wrapper JAR (committed to enable CI builds)
+# Gradle Wrapper JAR (not needed when using gradle directly in CI)
+gradle/wrapper/gradle-wrapper.jar
 
 # Misc
 *.log
