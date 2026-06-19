@@ -68,20 +68,23 @@ jobs:
 
           echo "✅ Android SDK 安装完成"
 
-      # 4. 缓存 Gradle 依赖
-      - name: 💾 缓存 Gradle 依赖
-        uses: actions/cache@v4
+      # 4. 安装 Gradle 并生成 Wrapper
+      - name: 🏗️ 安装 Gradle
+        uses: gradle/actions/setup-gradle@v3
         with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+          gradle-version: 8.5
+          cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
 
-      # 5. 赋予 gradlew 执行权限
-      - name: 🔑 赋予 gradlew 执行权限
-        run: chmod +x gradlew
+      # 5. 生成 Gradle Wrapper（如果 wrapper jar 不存在）
+      - name: 🔄 生成 Gradle Wrapper
+        run: |
+          if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
+            gradle wrapper --gradle-version 8.5
+            echo "✅ gradle-wrapper.jar 已生成"
+          else
+            echo "✅ gradle-wrapper.jar 已存在"
+          fi
+          chmod +x gradlew
 
       # 6. 编译 APK
       - name: 🛠️ 编译 ${{ github.event.inputs.build_type || 'debug' }} APK
