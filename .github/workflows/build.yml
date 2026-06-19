@@ -68,19 +68,31 @@ jobs:
 
           echo "✅ Android SDK 安装完成"
 
-      # 4. 安装 Gradle
+      # 4. 安装 Gradle（安装到用户目录，避免权限问题）
       - name: 🏗️ 安装 Gradle
         run: |
           cd /tmp
           curl -fsSL -o gradle.zip \
             "https://services.gradle.org/distributions/gradle-8.5-bin.zip"
           unzip -q gradle.zip
-          mv gradle-8.5 /opt/gradle
-          ln -s /opt/gradle/bin/gradle /usr/local/bin/gradle
+          mkdir -p $HOME/gradle
+          mv gradle-8.5/* $HOME/gradle/
+          echo "$HOME/gradle/bin" >> $GITHUB_PATH
           echo "✅ Gradle 8.5 安装完成"
           gradle --version
 
-      # 5. 编译 APK
+      # 5. 添加 Gradle 缓存
+      - name: 💾 缓存 Gradle 依赖
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      # 6. 编译 APK
       - name: 🛠️ 编译 ${{ github.event.inputs.build_type || 'debug' }} APK
         env:
           BUILD_TYPE: ${{ github.event.inputs.build_type || 'debug' }}
