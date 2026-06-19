@@ -79,9 +79,38 @@ jobs:
           mv gradle-8.5/* $HOME/gradle/
           echo "$HOME/gradle/bin" >> $GITHUB_PATH
           echo "✅ Gradle 8.5 安装完成"
-          gradle --version
 
-      # 5. 添加 Gradle 缓存
+      # 5. 验证环境
+      - name: 🔍 验证构建环境
+        run: |
+          echo "## 🔍 构建环境检查" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Java
+          echo "**Java:**" >> $GITHUB_STEP_SUMMARY
+          java -version 2>&1 || echo "Java not found" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Gradle
+          echo "**Gradle:**" >> $GITHUB_STEP_SUMMARY
+          $HOME/gradle/bin/gradle --version || echo "Gradle not found at $HOME/gradle/bin/gradle" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Android SDK
+          echo "**Android SDK:**" >> $GITHUB_STEP_SUMMARY
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_STEP_SUMMARY
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_STEP_SUMMARY
+          ls -la $ANDROID_HOME/platforms/ 2>&1 || echo "No platforms directory" >> $GITHUB_STEP_SUMMARY
+          ls -la $ANDROID_HOME/build-tools/ 2>&1 || echo "No build-tools directory" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Gradle wrapper
+          echo "**Gradle Wrapper:**" >> $GITHUB_STEP_SUMMARY
+          ls -la gradle/wrapper/ 2>&1 || echo "No wrapper directory" >> $GITHUB_STEP_SUMMARY
+          
+          echo "✅ 环境检查完成" >> $GITHUB_STEP_SUMMARY
+
+      # 6. 添加 Gradle 缓存
       - name: 💾 缓存 Gradle 依赖
         uses: actions/cache@v4
         with:
@@ -92,7 +121,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      # 6. 编译 APK
+      # 7. 编译 APK
       - name: 🛠️ 编译 ${{ github.event.inputs.build_type || 'debug' }} APK
         env:
           BUILD_TYPE: ${{ github.event.inputs.build_type || 'debug' }}
@@ -101,6 +130,8 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
         run: |
+          set -x  # 打印每条命令
+          
           # Release 签名配置
           if [ "$BUILD_TYPE" = "release" ] && [ -n "$KEYSTORE_BASE64" ]; then
             echo "$KEYSTORE_BASE64" | base64 -d > app/keystore.jks
@@ -111,8 +142,16 @@ jobs:
             echo "✅ 签名密钥已配置"
           fi
 
-          # 执行构建（直接使用 gradle 命令）
-          gradle assemble${BUILD_TYPE^} --no-daemon --stacktrace
+          # 测试 Gradle 是否可用
+          echo "--- 测试 gradle 命令 ---"
+          which gradle || echo "gradle not in PATH"
+          $HOME/gradle/bin/gradle --version || echo "gradle command failed"
+          
+          # 执行构建
+          echo "--- 开始构建 ---"
+          $HOME/gradle/bin/gradle assembleDebug --no-daemon --stacktrace --info 2>&1
+          
+          echo "--- 构建完成 ---"
 
       # 7. 上传 APK 产物
       - name: 📦 上传 APK 产物
