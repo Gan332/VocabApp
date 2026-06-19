@@ -70,12 +70,17 @@ jobs:
 
       # 4. 安装 Gradle
       - name: 🏗️ 安装 Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: 8.5
-          cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
+        run: |
+          cd /tmp
+          curl -fsSL -o gradle.zip \
+            "https://services.gradle.org/distributions/gradle-8.5-bin.zip"
+          unzip -q gradle.zip
+          mv gradle-8.5 /opt/gradle
+          ln -s /opt/gradle/bin/gradle /usr/local/bin/gradle
+          echo "✅ Gradle 8.5 安装完成"
+          gradle --version
 
-      # 5. 编译 APK（直接使用 Gradle 命令，避免 wrapper jar 依赖）
+      # 5. 编译 APK
       - name: 🛠️ 编译 ${{ github.event.inputs.build_type || 'debug' }} APK
         env:
           BUILD_TYPE: ${{ github.event.inputs.build_type || 'debug' }}
