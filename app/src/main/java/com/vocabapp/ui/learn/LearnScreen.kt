@@ -134,6 +134,7 @@ private fun BankSelector(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DirectionSelector(
     selected: String,
@@ -179,6 +180,7 @@ private fun ModeSelector(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ModeChip(
     value: String,
